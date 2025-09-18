@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 from pysolar.solar import get_altitude, get_azimuth
 from timezonefinder import TimezoneFinder
 import pytz
-import geopy
 from geopy.geocoders import Nominatim
 import os
 
@@ -37,8 +36,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
     dcc.Tabs([
         dcc.Tab(label="Seasonal Solar Altitude", children=[
             dcc.Graph(id="seasonal-graph"),
-            dcc.Graph(id="sunrise-sunset-graph"),
-            html.Div(id="map-preview")
+            dcc.Graph(id="sunrise-sunset-graph")
         ]),
         dcc.Tab(label="Yesterday's Solar Altitude", children=[dcc.Graph(id="yesterday-graph")]),
         dcc.Tab(label="Sun Direction & Location", children=[html.Div(id="sun-info")]),
@@ -59,6 +57,11 @@ def get_coordinates(location_text):
         location = geolocator.geocode(location_text)
         if location:
             return location.latitude, location.longitude, location.address
+        # Fallback: try just the city name
+        city_only = location_text.split(",")[0]
+        location = geolocator.geocode(city_only)
+        if location:
+            return location.latitude, location.longitude, location.address
     except:
         return None
     return None
@@ -73,7 +76,6 @@ def get_local_timezone(lat, lon):
     Output("location-status", "children"),
     Output("seasonal-graph", "figure"),
     Output("sunrise-sunset-graph", "figure"),
-    Output("map-preview", "children"),
     Output("yesterday-graph", "figure"),
     Output("sun-info", "children"),
     Input("submit-location", "n_clicks"),
@@ -81,11 +83,11 @@ def get_local_timezone(lat, lon):
 )
 def update_dashboard(n_clicks, location_text):
     if not location_text:
-        return "Please enter a city and state.", go.Figure(), go.Figure(), "", go.Figure(), ""
+        return "Please enter a city and state.", go.Figure(), go.Figure(), go.Figure(), ""
 
     coords = get_coordinates(location_text)
     if not coords:
-        return f"Could not find location: {location_text}", go.Figure(), go.Figure(), "", go.Figure(), ""
+        return f"Could not find location: {location_text}", go.Figure(), go.Figure(), go.Figure(), ""
 
     lat, lon, full_address = coords
     local_tz = get_local_timezone(lat, lon)
@@ -162,12 +164,6 @@ def update_dashboard(n_clicks, location_text):
         template="plotly_white"
     )
 
-    # Map preview
-    map_html = html.Iframe(
-        src=f"https://www.openstreetmap.org/export/embed.html?bbox={lon-0.05}%2C{lat-0.05}%2C{lon+0.05}%2C{lat+0.05}&layer=mapnik&marker={lat}%2C{lon}",
-        style={"width": "100%", "height": "400px", "border": "none"}
-    )
-
     # Yesterday's Solar Altitude
     yesterday = datetime.utcnow().date() - timedelta(days=1)
     times = [datetime.combine(yesterday, datetime.min.time()) + timedelta(minutes=15 * i) for i in range(96)]
@@ -189,7 +185,7 @@ def update_dashboard(n_clicks, location_text):
         html.P(f"Solar Noon Azimuth: {azimuth_now:.2f}°")
     ])
 
-    return "", seasonal_fig, sunrise_sunset_fig, map_html, yesterday_fig, sun_info
+    return "", seasonal_fig, sunrise_sunset_fig, yesterday_fig, sun_info
 
 # Run app
 if __name__ == "__main__":
