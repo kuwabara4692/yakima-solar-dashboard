@@ -43,7 +43,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
         dcc.Tab(label="Solar Calendar", children=[
             html.H3("Solstices & Equinoxes in 2025", style={"color": "#e67e22"}),
             html.Ul([
-                html.Li(f"{label}: {date}", style={"marginBottom": "10px", "fontSize": "18px"})
+                html.Li(f"{label}: {date} 12:00 PM local time", style={"marginBottom": "10px", "fontSize": "18px"})
                 for label, date in solar_events.items()
             ], style={"listStyleType": "🌞", "paddingLeft": "20px"})
         ])
@@ -156,18 +156,35 @@ def update_dashboard(n_clicks, location_text):
         title=f"Solar Noon Altitude by Season ({full_address})",
         yaxis_title="Altitude (°)",
         template="plotly_white",
-        showlegend=False
+        showlegend=False,
+        height=600,
+        annotations=[
+            dict(
+                x=1.5,
+                y=45,
+                xref="x",
+                yref="y",
+                text="45° Reference Altitude",
+                showarrow=False,
+                font=dict(color="gray", size=12)
+            )
+        ]
     )
     sunrise_sunset_fig.update_layout(
         title="Sunrise and Sunset Times by Season",
-        yaxis_title="Hour (UTC)",
-        template="plotly_white"
+        yaxis_title="Hour (Local Time)",
+        template="plotly_white",
+        legend=dict(
+            itemsizing="constant",
+            traceorder="normal"
+        )
     )
+
 
     # Yesterday's Solar Altitude
     yesterday = datetime.utcnow().date() - timedelta(days=1)
-    times = [datetime.combine(yesterday, datetime.min.time()) + timedelta(minutes=15 * i) for i in range(96)]
-    altitudes = [get_altitude(lat, lon, pytz.utc.localize(t)) for t in times]
+    times = [local_tz.localize(datetime.combine(yesterday, datetime.min.time()) + timedelta(minutes=15 * i)) for i in range(96)]
+    altitudes = [get_altitude(lat, lon, t.astimezone(pytz.utc)) for t in times]
     yesterday_fig = go.Figure()
     yesterday_fig.add_trace(go.Scatter(x=times, y=altitudes, mode="lines", name="Altitude"))
     yesterday_fig.update_layout(title=f"Solar Altitude on {yesterday} ({full_address})", xaxis_title="Time (UTC)", yaxis_title="Altitude (°)", template="plotly_white")
@@ -184,8 +201,16 @@ def update_dashboard(n_clicks, location_text):
         html.P(f"Solar Noon Altitude: {altitude_now:.2f}°"),
         html.P(f"Solar Noon Azimuth: {azimuth_now:.2f}°")
     ])
+    
+    # Solar Calendar with time of day
+    calendar_items = []
+    for label, date_str in solar_events.items():
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        dt_local = local_tz.localize(datetime.combine(dt.date(), datetime.min.time()) + timedelta(hours=12))
+        formatted = dt_local.strftime("%B %d, %Y at %I:%M %p %Z")
+        calendar_items.append(html.Li(f"{label}: {formatted}", style={"marginBottom": "10px", "fontSize": "18px"}))
 
-    return "", seasonal_fig, sunrise_sunset_fig, yesterday_fig, sun_info
+    return "", seasonal_fig, sunrise_sunset_fig, yesterday_fig, sun_info, calendar_items
 
 # Run app
 if __name__ == "__main__":
