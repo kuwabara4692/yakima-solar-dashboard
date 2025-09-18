@@ -19,20 +19,37 @@ solar_events = {
 }
 
 # Geolocation helpers
+# TODO: Integrate autocomplete with Google Places or Mapbox
 def get_coordinates(location_text):
-    geolocator = Nominatim(user_agent="solar-dashboard")
+    geolocator = Nominatim(user_agent="solar-dashboard-app")
+    location_text = location_text.strip().title()
+
     try:
-        location = geolocator.geocode(location_text, exactly_one=True)
+        # Try full input
+        location = geolocator.geocode(location_text, exactly_one=True, timeout=10)
         if location:
+            print(f"Found location: {location.address}")
             return location.latitude, location.longitude, location.address
+
+        # Fallback: just the city name
         city_only = location_text.split(",")[0]
-        location = geolocator.geocode(city_only, exactly_one=True)
+        location = geolocator.geocode(city_only, exactly_one=True, timeout=10)
         if location:
+            print(f"Fallback location: {location.address}")
             return location.latitude, location.longitude, location.address
+
+        # Fallback: guess country
+        location = geolocator.geocode(f"{city_only}, United States", exactly_one=True, timeout=10)
+        if location:
+            print(f"Guessed country fallback: {location.address}")
+            return location.latitude, location.longitude, location.address
+
     except Exception as e:
         print(f"Geocoding error: {e}")
         return None
+
     return None
+
 
 def get_local_timezone(lat, lon):
     tf = TimezoneFinder()
