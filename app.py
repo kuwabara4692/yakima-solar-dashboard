@@ -63,7 +63,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
             "fontSize": "64px",
             "marginBottom": "0"
         }),
-        html.H3("Let’s keep the momentum glowing 🌞", style={
+        html.H3("Let’s keep the momentum glowing", style={
             "textAlign": "center",
             "color": "#555",
             "fontSize": "24px",
