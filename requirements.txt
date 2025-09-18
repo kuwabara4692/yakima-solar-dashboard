@@ -5,3 +5,4 @@ pillow
 pysolar
 pytz
 geopy
+timezonefinder
