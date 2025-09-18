@@ -78,6 +78,7 @@ def get_local_timezone(lat, lon):
     Output("sunrise-sunset-graph", "figure"),
     Output("yesterday-graph", "figure"),
     Output("sun-info", "children"),
+    Output("calendar-list", "children"),
     Input("submit-location", "n_clicks"),
     State("location-input", "value")
 )
