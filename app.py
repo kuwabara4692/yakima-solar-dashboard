@@ -23,7 +23,21 @@ solar_events = {
 
 # Layout
 app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe UI"}, children=[
-    html.H1("🌞 Solar Dashboard", style={"textAlign": "center", "color": "#e67e22"}),
+        html.Div([
+        html.H1("🌞Solar Dashboard🌞", style={
+            "textAlign": "center",
+            "color": "#e67e22",
+            "fontSize": "64px",
+            "marginBottom": "0"
+        }),
+        html.H3("Let’s keep the momentum glowing 🌞", style={
+            "textAlign": "center",
+            "color": "#555",
+            "fontSize": "24px",
+            "marginTop": "0",
+            "marginBottom": "30px"
+        })
+    ]),
 
     html.Div([
         html.Label("Enter City and State:", style={"fontWeight": "bold"}),
@@ -123,7 +137,7 @@ def update_dashboard(n_clicks, location_text):
         dt_utc = dt_localized.astimezone(pytz.utc)
         altitude = get_altitude(lat, lon, dt_utc)
 
-        day_of_year = dt_local.timetuple().tm_day
+        day_of_year = dt_local.timetuple().tm_yday
         sunrise = 8 - 2 * abs((day_of_year - 172) / 172)
         sunset = 20 + 2 * abs((day_of_year - 172) / 172)
 
