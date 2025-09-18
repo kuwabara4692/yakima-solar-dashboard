@@ -176,7 +176,7 @@ def update_dashboard(n_clicks, location_text):
         y0=45, y1=45,
         line=dict(color="gray", dash="dash")
     )
-        seasonal_fig.update_layout(
+    seasonal_fig.update_layout(
         title=f"Solar Noon Altitude by Season ({full_address})",
         yaxis_title="Altitude (°)",
         template="plotly_white",
