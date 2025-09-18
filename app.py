@@ -52,13 +52,15 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
                 html.P("SOHO C3 Coronagraph", style={"fontWeight": "bold", "marginTop": "20px"}),
                 html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_c3small.gif", style={"width": "100%", "maxWidth": "600px"}),
                 html.P("SOHO EIT 284 Å", style={"fontWeight": "bold", "marginTop": "20px"}),
-                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_eit_284small.gif", style={"width": "100%", "maxWidth": "600px"})
+                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_eit_284small.gif", style={"width": "100%", "maxWidth": "600px"}),
+                html.P([
+                    html.A("NASA SOHO – Solar and Heliospheric Observatory", href="https://soho.nascom.nasa.gov/home.html", target="_blank", style={"color": "#2980b9", "fontWeight": "bold", "textDecoration": "none"})
+                ], style={"marginTop": "30px", "fontSize": "16px"})
             ], style={"textAlign": "center", "padding": "20px"})
         ])
     ])
 ])
 
-# Geolocation helpers
 def get_coordinates(location_text):
     geolocator = Nominatim(user_agent="solar-dashboard")
     try:
@@ -78,7 +80,6 @@ def get_local_timezone(lat, lon):
     tz_name = tf.timezone_at(lat=lat, lng=lon)
     return pytz.timezone(tz_name) if tz_name else pytz.utc
 
-# Callback
 @app.callback(
     Output("location-status", "children"),
     Output("seasonal-graph", "figure"),
@@ -122,7 +123,7 @@ def update_dashboard(n_clicks, location_text):
         dt_utc = dt_localized.astimezone(pytz.utc)
         altitude = get_altitude(lat, lon, dt_utc)
 
-        day_of_year = dt_local.timetuple().tm_yday
+        day_of_year = dt_local.timetuple().tm_day
         sunrise = 8 - 2 * abs((day_of_year - 172) / 172)
         sunset = 20 + 2 * abs((day_of_year - 172) / 172)
 
