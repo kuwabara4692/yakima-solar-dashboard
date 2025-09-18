@@ -5,20 +5,14 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pysolar.solar import get_altitude, get_azimuth
 import pytz
-import io
-import base64
-import os
+import geopy
+from geopy.geocoders import Nominatim
 
-# Supported cities
-cities = {
-    "Yakima, WA": (46.6021, -120.5059),
-    "New York, NY": (40.7128, -74.0060),
-    "Los Angeles, CA": (34.0522, -118.2437),
-    "Chicago, IL": (41.8781, -87.6298),
-    "Miami, FL": (25.7617, -80.1918)
-}
+# Initialize app
+app = dash.Dash(__name__)
+app.title = "Solar Dashboard"
 
-# Solstices and Equinoxes
+# Solar calendar events
 solar_events = {
     "Spring Equinox": "2025-03-20",
     "Summer Solstice": "2025-06-20",
@@ -26,173 +20,100 @@ solar_events = {
     "Winter Solstice": "2025-12-21"
 }
 
-# Date range
-dates = pd.date_range(start="2025-01-01", end="2025-12-31", freq="D")
-
-# App setup
-app = dash.Dash(__name__)
-app.title = "Solar Dashboard"
-
-app.layout = html.Div(style={
-    "backgroundColor": "#fdf6e3",
-    "fontFamily": "Segoe UI, sans-serif",
-    "color": "#333"
-}, children=[
+# Layout
+app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe UI"}, children=[
     html.H1("🌞 Solar Dashboard", style={"textAlign": "center", "color": "#e67e22"}),
 
     html.Div([
-        html.Label("Select Location:", style={"fontWeight": "bold"}),
-        dcc.Dropdown(
-            id="location-dropdown",
-            options=[{"label": city, "value": city} for city in cities],
-            value="Yakima, WA",
-            style={"width": "300px"}
-        )
+        html.Label("Enter City and State:", style={"fontWeight": "bold"}),
+        dcc.Input(id="location-input", type="text", placeholder="e.g. Yakima, WA", style={"width": "300px"}),
+        html.Button("Submit", id="submit-location", n_clicks=0)
     ], style={"padding": "10px"}),
 
+    html.Div(id="location-status", style={"color": "#e74c3c", "marginBottom": "10px"}),
+
     dcc.Tabs([
-        dcc.Tab(label="Solar Azimuth & Day Length", children=[
-            html.H3("Solar Azimuth and Day Length", style={"color": "#e67e22"}),
-            dcc.Graph(id="angles-graph"),
-            html.Button("Download Solar Data", id="download-button"),
-            dcc.Download(id="download-data")
-        ]),
-        dcc.Tab(label="Solar Altitude", children=[
-            html.H3("Solar Noon Altitude Over the Year", style={"color": "#e67e22"}),
-            dcc.Graph(id="altitude-graph")
-        ]),
-        dcc.Tab(label="Sunrise/Sunset", children=[
-            html.H3("Sunrise and Sunset Times Across 2025", style={"color": "#e67e22"}),
-            dcc.Graph(id="sunrise-graph")
-        ]),
-        dcc.Tab(label="Compare Cities", children=[
-            html.H3("Solar Altitude Comparison", style={"color": "#e67e22"}),
-            dcc.Graph(id="comparison-graph")
-        ]),
+        dcc.Tab(label="Seasonal Solar Altitude", children=[dcc.Graph(id="seasonal-graph")]),
+        dcc.Tab(label="Yesterday's Solar Altitude", children=[dcc.Graph(id="yesterday-graph")]),
+        dcc.Tab(label="Sun Direction & Location", children=[html.Div(id="sun-info")]),
         dcc.Tab(label="Solar Calendar", children=[
             html.H3("Solstices & Equinoxes in 2025", style={"color": "#e67e22"}),
             html.Ul([
                 html.Li(f"{label}: {date}", style={"marginBottom": "10px", "fontSize": "18px"})
                 for label, date in solar_events.items()
             ], style={"listStyleType": "🌞", "paddingLeft": "20px"})
-        ]),
-        dcc.Tab(label="Temperature Overlay", children=[
-            html.H3("Upload Temperature Data (CSV)", style={"color": "#e67e22"}),
-            dcc.Upload(
-                id="upload-data",
-                children=html.Div(["📁 Drag and drop or click to upload"]),
-                style={
-                    "width": "100%",
-                    "height": "60px",
-                    "lineHeight": "60px",
-                    "borderWidth": "1px",
-                    "borderStyle": "dashed",
-                    "borderRadius": "5px",
-                    "textAlign": "center",
-                    "margin": "10px"
-                },
-                multiple=False
-            ),
-            html.Div(id="temperature-graph")
         ])
     ])
 ])
 
-def generate_solar_data(lat, lon):
-    sunrise = [8 - 2 * abs((date.dayofyear - 172) / 172) for date in dates]
-    sunset = [20 + 2 * abs((date.dayofyear - 172) / 172) for date in dates]
-    data = []
-    for i, date in enumerate(dates):
-        dt = pytz.utc.localize(datetime.combine(date, datetime.min.time()) + timedelta(hours=20))
-        altitude = get_altitude(lat, lon, dt)
-        azimuth = get_azimuth(lat, lon, dt)
-        day_length = sunset[i] - sunrise[i]
-        data.append({
-            "Date": date,
-            "Altitude": altitude,
-            "Azimuth": azimuth,
-            "Day Length": day_length,
-            "Sunrise": sunrise[i],
-            "Sunset": sunset[i]
-        })
-    return pd.DataFrame(data)
-
-def add_annotations(fig):
-    for label, date_str in solar_events.items():
-        fig.add_vline(
-            x=pd.to_datetime(date_str),
-            line=dict(color="gray", dash="dot"),
-            annotation_text=label,
-            annotation_position="top left"
-        )
-    return fig
-
-@app.callback(
-    Output("angles-graph", "figure"),
-    Output("altitude-graph", "figure"),
-    Output("sunrise-graph", "figure"),
-    Input("location-dropdown", "value")
-)
-def update_graphs(location):
-    lat, lon = cities[location]
-    df = generate_solar_data(lat, lon)
-
-    fig_angles = go.Figure([
-        go.Scatter(x=df["Date"], y=df["Azimuth"], mode="lines", name="Azimuth", line=dict(color="green")),
-        go.Scatter(x=df["Date"], y=df["Day Length"], mode="lines", name="Day Length", line=dict(color="purple"))
-    ])
-    fig_angles.update_layout(title=f"Solar Azimuth & Day Length ({location})", xaxis_title="Date", yaxis_title="Degrees / Hours", template="plotly_white")
-    fig_angles = add_annotations(fig_angles)
-
-    fig_altitude = go.Figure([
-        go.Scatter(x=df["Date"], y=df["Altitude"], mode="lines", name="Solar Noon Altitude")
-    ])
-    fig_altitude.update_layout(title=f"Solar Noon Altitude ({location})", xaxis_title="Date", yaxis_title="Altitude (°)", template="plotly_white")
-    fig_altitude = add_annotations(fig_altitude)
-
-    fig_sun = go.Figure([
-        go.Scatter(x=df["Date"], y=df["Sunrise"], mode="lines", name="Sunrise", line=dict(color="orange")),
-        go.Scatter(x=df["Date"], y=df["Sunset"], mode="lines", name="Sunset", line=dict(color="blue"))
-    ])
-    fig_sun.update_layout(title=f"Sunrise & Sunset Times ({location})", xaxis_title="Date", yaxis_title="Hour (UTC)", template="plotly_white")
-    fig_sun = add_annotations(fig_sun)
-
-    return fig_angles, fig_altitude, fig_sun
-
-@app.callback(
-    Output("comparison-graph", "figure"),
-    Input("location-dropdown", "value")
-)
-def compare_cities(selected_city):
-    fig = go.Figure()
-    for city, (lat, lon) in cities.items():
-        df = generate_solar_data(lat, lon)
-        fig.add_trace(go.Scatter(x=df["Date"], y=df["Altitude"], mode="lines", name=city))
-    fig.update_layout(title="Solar Noon Altitude Comparison", xaxis_title="Date", yaxis_title="Altitude (°)", template="plotly_white")
-    return add_annotations(fig)
-
-@app.callback(
-    Output("download-data", "data"),
-    Input("download-button", "n_clicks"),
-    State("location-dropdown", "value"),
-    prevent_initial_call=True
-)
-def download_csv(n_clicks, location):
-    lat, lon = cities[location]
-    df = generate_solar_data(lat, lon)
-    return dcc.send_data_frame(df.to_csv, f"{location.replace(', ', '_')}_solar_data_2025.csv")
-
-@app.callback(
-    Output("temperature-graph", "children"),
-    Input("upload-data", "contents"),
-    State("upload-data", "filename")
-)
-def update_temperature_graph(contents, filename):
-    if contents is None:
-        return html.P("Upload a CSV file with 'Date' and 'Temperature' columns.")
-
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
+# Helper: Geocode city/state
+def get_coordinates(location_text):
+    geolocator = Nominatim(user_agent="solar-dashboard")
     try:
-        df_temp = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-        df_temp["Date"] = pd
+        location = geolocator.geocode(location_text)
+        if location:
+            return location.latitude, location.longitude
+    except:
+        return None
+    return None
+
+# Callback: Update all graphs and info
+@app.callback(
+    Output("location-status", "children"),
+    Output("seasonal-graph", "figure"),
+    Output("yesterday-graph", "figure"),
+    Output("sun-info", "children"),
+    Input("submit-location", "n_clicks"),
+    State("location-input", "value")
+)
+def update_dashboard(n_clicks, location_text):
+    if not location_text:
+        return "Please enter a city and state.", go.Figure(), go.Figure(), ""
+
+    coords = get_coordinates(location_text)
+    if not coords:
+        return f"Could not find location: {location_text}", go.Figure(), go.Figure(), ""
+
+    lat, lon = coords
+    tz = pytz.utc
+
+    # Seasonal Solar Altitude
+    seasons = {
+        "Spring": datetime(2025, 3, 20, 12),
+        "Summer": datetime(2025, 6, 20, 12),
+        "Fall": datetime(2025, 9, 22, 12),
+        "Winter": datetime(2025, 12, 21, 12)
+    }
+    seasonal_fig = go.Figure()
+    for name, dt in seasons.items():
+        dt_utc = tz.localize(dt)
+        altitude = get_altitude(lat, lon, dt_utc)
+        seasonal_fig.add_trace(go.Bar(x=[name], y=[altitude], name=name))
+    seasonal_fig.update_layout(title="Solar Noon Altitude by Season", yaxis_title="Altitude (°)", template="plotly_white")
+
+    # Yesterday's Solar Altitude
+    yesterday = datetime.utcnow().date() - timedelta(days=1)
+    times = [datetime.combine(yesterday, datetime.min.time()) + timedelta(minutes=15 * i) for i in range(96)]
+    altitudes = [get_altitude(lat, lon, tz.localize(t)) for t in times]
+    yesterday_fig = go.Figure()
+    yesterday_fig.add_trace(go.Scatter(x=times, y=altitudes, mode="lines", name="Altitude"))
+    yesterday_fig.update_layout(title=f"Solar Altitude on {yesterday}", xaxis_title="Time (UTC)", yaxis_title="Altitude (°)", template="plotly_white")
+
+    # Sun Info
+    noon = tz.localize(datetime.combine(datetime.utcnow().date(), datetime.min.time()) + timedelta(hours=12))
+    altitude_now = get_altitude(lat, lon, noon)
+    azimuth_now = get_azimuth(lat, lon, noon)
+    sun_info = html.Div([
+        html.H4("Sun Direction & Location", style={"color": "#e67e22"}),
+        html.P(f"Location: {location_text}"),
+        html.P(f"Latitude: {lat:.4f}, Longitude: {lon:.4f}"),
+        html.P(f"Solar Noon Altitude: {altitude_now:.2f}°"),
+        html.P(f"Solar Noon Azimuth: {azimuth_now:.2f}°")
+    ])
+
+    return "", seasonal_fig, yesterday_fig, sun_info
+
+# Run app
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8050))
+    app.run(host="0.0.0.0", port=port, debug=True)
