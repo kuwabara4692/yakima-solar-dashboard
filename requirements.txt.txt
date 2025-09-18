@@ -1,6 +1,0 @@
-dash
-plotly
-pandas
-pillow
-pysolar
-pytz
