@@ -4,3 +4,4 @@ pandas
 pillow
 pysolar
 pytz
+geopy
