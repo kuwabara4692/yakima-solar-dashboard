@@ -1,7 +1,6 @@
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
-import pandas as pd
 from datetime import datetime, timedelta
 from pysolar.solar import get_altitude, get_azimuth
 from timezonefinder import TimezoneFinder
@@ -19,28 +18,27 @@ solar_events = {
     "Winter Solstice": "2025-12-21"
 }
 
-# Helper: Geocode city/state
+# Geolocation helpers
 def get_coordinates(location_text):
     geolocator = Nominatim(user_agent="solar-dashboard")
     try:
-        location = geolocator.geocode(location_text)
+        location = geolocator.geocode(location_text, exactly_one=True)
         if location:
             return location.latitude, location.longitude, location.address
         city_only = location_text.split(",")[0]
-        location = geolocator.geocode(city_only)
+        location = geolocator.geocode(city_only, exactly_one=True)
         if location:
             return location.latitude, location.longitude, location.address
-    except:
+    except Exception as e:
+        print(f"Geocoding error: {e}")
         return None
     return None
 
-# Helper: Get timezone from lat/lon
 def get_local_timezone(lat, lon):
     tf = TimezoneFinder()
     tz_name = tf.timezone_at(lat=lat, lng=lon)
     return pytz.timezone(tz_name) if tz_name else pytz.utc
 
-# Helper: Find sunrise and sunset by scanning solar altitude
 def find_sunrise_sunset(lat, lon, date, tz):
     sunrise = None
     sunset = None
@@ -62,11 +60,18 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
             "color": "#e67e22",
             "fontSize": "64px",
             "marginBottom": "0"
+        }),
+        html.H3("Let’s keep the momentum glowing 🌞", style={
+            "textAlign": "center",
+            "color": "#555",
+            "fontSize": "24px",
+            "marginTop": "0",
+            "marginBottom": "30px"
         })
     ]),
     html.Div([
-        html.Label("Enter City and State:", style={"fontWeight": "bold"}),
-        dcc.Input(id="location-input", type="text", placeholder="e.g. Yakima, WA", style={"width": "300px"}),
+        html.Label("Enter City and Country:", style={"fontWeight": "bold"}),
+        dcc.Input(id="location-input", type="text", placeholder="e.g. Tokyo, Japan or Nairobi, Kenya", style={"width": "300px"}),
         html.Button("Submit", id="submit-location", n_clicks=0)
     ], style={"padding": "10px"}),
 
@@ -112,7 +117,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
 )
 def update_dashboard(n_clicks, location_text):
     if not location_text:
-        return "Please enter a city and state.", go.Figure(), go.Figure(), go.Figure(), "", []
+        return "Please enter a city and country.", go.Figure(), go.Figure(), go.Figure(), "", []
 
     coords = get_coordinates(location_text)
     if not coords:
@@ -152,8 +157,7 @@ def update_dashboard(n_clicks, location_text):
             name=name,
             marker_color=season_colors[name],
             text=f"{altitude:.2f}°",
-            textposition="outside",
-            hovertext=f"{name} Solar Noon<br>{dt_localized.strftime('%Y-%m-%d %I:%M %p %Z')}<br>Altitude: {altitude:.2f}°"
+            textposition="outside"
         ))
 
         sunrise_sunset_fig.add_trace(go.Bar(
@@ -179,8 +183,7 @@ def update_dashboard(n_clicks, location_text):
         y0=45, y1=45,
         line=dict(color="gray", dash="dash")
     )
-
-    seasonal_fig.update_layout(
+        seasonal_fig.update_layout(
         title=f"Solar Noon Altitude by Season ({full_address})",
         yaxis_title="Altitude (°)",
         template="plotly_white",
