@@ -9,7 +9,7 @@ import io
 import base64
 import os
 
-# Supported cities with coordinates
+# Supported cities
 cities = {
     "Yakima, WA": (46.6021, -120.5059),
     "New York, NY": (40.7128, -74.0060),
@@ -18,7 +18,7 @@ cities = {
     "Miami, FL": (25.7617, -80.1918)
 }
 
-# Solstices and Equinoxes (2025)
+# Solstices and Equinoxes
 solar_events = {
     "Spring Equinox": "2025-03-20",
     "Summer Solstice": "2025-06-20",
@@ -26,15 +26,19 @@ solar_events = {
     "Winter Solstice": "2025-12-21"
 }
 
-# Generate date range
+# Date range
 dates = pd.date_range(start="2025-01-01", end="2025-12-31", freq="D")
 
-# Dash app setup
+# App setup
 app = dash.Dash(__name__)
-app.title = "Yakima Solar Dashboard"
+app.title = "Solar Dashboard"
 
-app.layout = html.Div(style={"backgroundColor": "#fffbe6", "fontFamily": "Arial"}, children=[
-    html.H1("☀️ Solar Dashboard", style={"textAlign": "center", "color": "#e67e22"}),
+app.layout = html.Div(style={
+    "backgroundColor": "#fdf6e3",
+    "fontFamily": "Segoe UI, sans-serif",
+    "color": "#333"
+}, children=[
+    html.H1("🌞 Solar Dashboard", style={"textAlign": "center", "color": "#e67e22"}),
 
     html.Div([
         html.Label("Select Location:", style={"fontWeight": "bold"}),
@@ -60,6 +64,17 @@ app.layout = html.Div(style={"backgroundColor": "#fffbe6", "fontFamily": "Arial"
         dcc.Tab(label="Sunrise/Sunset", children=[
             html.H3("Sunrise and Sunset Times Across 2025", style={"color": "#e67e22"}),
             dcc.Graph(id="sunrise-graph")
+        ]),
+        dcc.Tab(label="Compare Cities", children=[
+            html.H3("Solar Altitude Comparison", style={"color": "#e67e22"}),
+            dcc.Graph(id="comparison-graph")
+        ]),
+        dcc.Tab(label="Solar Calendar", children=[
+            html.H3("Solstices & Equinoxes in 2025", style={"color": "#e67e22"}),
+            html.Ul([
+                html.Li(f"{label}: {date}", style={"marginBottom": "10px", "fontSize": "18px"})
+                for label, date in solar_events.items()
+            ], style={"listStyleType": "🌞", "paddingLeft": "20px"})
         ]),
         dcc.Tab(label="Temperature Overlay", children=[
             html.H3("Upload Temperature Data (CSV)", style={"color": "#e67e22"}),
@@ -122,24 +137,39 @@ def update_graphs(location):
     lat, lon = cities[location]
     df = generate_solar_data(lat, lon)
 
-    fig_angles = go.Figure()
-    fig_angles.add_trace(go.Scatter(x=df["Date"], y=df["Azimuth"], mode="lines", name="Azimuth", line=dict(color="green")))
-    fig_angles.add_trace(go.Scatter(x=df["Date"], y=df["Day Length"], mode="lines", name="Day Length", line=dict(color="purple")))
+    fig_angles = go.Figure([
+        go.Scatter(x=df["Date"], y=df["Azimuth"], mode="lines", name="Azimuth", line=dict(color="green")),
+        go.Scatter(x=df["Date"], y=df["Day Length"], mode="lines", name="Day Length", line=dict(color="purple"))
+    ])
     fig_angles.update_layout(title=f"Solar Azimuth & Day Length ({location})", xaxis_title="Date", yaxis_title="Degrees / Hours", template="plotly_white")
     fig_angles = add_annotations(fig_angles)
 
-    fig_altitude = go.Figure()
-    fig_altitude.add_trace(go.Scatter(x=df["Date"], y=df["Altitude"], mode="lines", name="Solar Noon Altitude"))
+    fig_altitude = go.Figure([
+        go.Scatter(x=df["Date"], y=df["Altitude"], mode="lines", name="Solar Noon Altitude")
+    ])
     fig_altitude.update_layout(title=f"Solar Noon Altitude ({location})", xaxis_title="Date", yaxis_title="Altitude (°)", template="plotly_white")
     fig_altitude = add_annotations(fig_altitude)
 
-    fig_sun = go.Figure()
-    fig_sun.add_trace(go.Scatter(x=df["Date"], y=df["Sunrise"], mode="lines", name="Sunrise", line=dict(color="orange")))
-    fig_sun.add_trace(go.Scatter(x=df["Date"], y=df["Sunset"], mode="lines", name="Sunset", line=dict(color="blue")))
+    fig_sun = go.Figure([
+        go.Scatter(x=df["Date"], y=df["Sunrise"], mode="lines", name="Sunrise", line=dict(color="orange")),
+        go.Scatter(x=df["Date"], y=df["Sunset"], mode="lines", name="Sunset", line=dict(color="blue"))
+    ])
     fig_sun.update_layout(title=f"Sunrise & Sunset Times ({location})", xaxis_title="Date", yaxis_title="Hour (UTC)", template="plotly_white")
     fig_sun = add_annotations(fig_sun)
 
     return fig_angles, fig_altitude, fig_sun
+
+@app.callback(
+    Output("comparison-graph", "figure"),
+    Input("location-dropdown", "value")
+)
+def compare_cities(selected_city):
+    fig = go.Figure()
+    for city, (lat, lon) in cities.items():
+        df = generate_solar_data(lat, lon)
+        fig.add_trace(go.Scatter(x=df["Date"], y=df["Altitude"], mode="lines", name=city))
+    fig.update_layout(title="Solar Noon Altitude Comparison", xaxis_title="Date", yaxis_title="Altitude (°)", template="plotly_white")
+    return add_annotations(fig)
 
 @app.callback(
     Output("download-data", "data"),
@@ -166,13 +196,4 @@ def update_temperature_graph(contents, filename):
     try:
         df_temp = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
         df_temp["Date"] = pd.to_datetime(df_temp["Date"])
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_temp["Date"], y=df_temp["Temperature"], mode="lines", name="Temperature", line=dict(color="red")))
-        fig.update_layout(title=f"Temperature Trends from {filename}", xaxis_title="Date", yaxis_title="Temperature (°C)", template="plotly_white")
-        return dcc.Graph(figure=fig)
-    except Exception as e:
-        return html.P(f"Error processing file: {e}")
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8050))
-    app.run(host="0.0.0.0", port=port, debug=True)
+        fig = go.Figure
