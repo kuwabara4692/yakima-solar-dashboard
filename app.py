@@ -9,11 +9,9 @@ import pytz
 from geopy.geocoders import Nominatim
 import os
 
-# Initialize app
 app = dash.Dash(__name__)
 app.title = "Solar Dashboard"
 
-# Solar calendar events
 solar_events = {
     "Spring Equinox": "2025-03-20",
     "Summer Solstice": "2025-06-20",
@@ -21,9 +19,44 @@ solar_events = {
     "Winter Solstice": "2025-12-21"
 }
 
+# Helper: Geocode city/state
+def get_coordinates(location_text):
+    geolocator = Nominatim(user_agent="solar-dashboard")
+    try:
+        location = geolocator.geocode(location_text)
+        if location:
+            return location.latitude, location.longitude, location.address
+        city_only = location_text.split(",")[0]
+        location = geolocator.geocode(city_only)
+        if location:
+            return location.latitude, location.longitude, location.address
+    except:
+        return None
+    return None
+
+# Helper: Get timezone from lat/lon
+def get_local_timezone(lat, lon):
+    tf = TimezoneFinder()
+    tz_name = tf.timezone_at(lat=lat, lng=lon)
+    return pytz.timezone(tz_name) if tz_name else pytz.utc
+
+# Helper: Find sunrise and sunset by scanning solar altitude
+def find_sunrise_sunset(lat, lon, date, tz):
+    sunrise = None
+    sunset = None
+    for minute in range(0, 1440):
+        dt_local = tz.localize(datetime.combine(date, datetime.min.time()) + timedelta(minutes=minute))
+        dt_utc = dt_local.astimezone(pytz.utc)
+        altitude = get_altitude(lat, lon, dt_utc)
+        if altitude > 0 and sunrise is None:
+            sunrise = dt_local
+        if altitude < 0 and sunrise and sunset is None:
+            sunset = dt_local
+    return sunrise, sunset
+
 # Layout
 app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe UI"}, children=[
-        html.Div([
+    html.Div([
         html.H1("🌞Solar Dashboard🌞", style={
             "textAlign": "center",
             "color": "#e67e22",
@@ -38,7 +71,6 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
             "marginBottom": "30px"
         })
     ]),
-
     html.Div([
         html.Label("Enter City and State:", style={"fontWeight": "bold"}),
         dcc.Input(id="location-input", type="text", placeholder="e.g. Yakima, WA", style={"width": "300px"}),
@@ -75,25 +107,6 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
     ])
 ])
 
-def get_coordinates(location_text):
-    geolocator = Nominatim(user_agent="solar-dashboard")
-    try:
-        location = geolocator.geocode(location_text)
-        if location:
-            return location.latitude, location.longitude, location.address
-        city_only = location_text.split(",")[0]
-        location = geolocator.geocode(city_only)
-        if location:
-            return location.latitude, location.longitude, location.address
-    except:
-        return None
-    return None
-
-def get_local_timezone(lat, lon):
-    tf = TimezoneFinder()
-    tz_name = tf.timezone_at(lat=lat, lng=lon)
-    return pytz.timezone(tz_name) if tz_name else pytz.utc
-
 @app.callback(
     Output("location-status", "children"),
     Output("seasonal-graph", "figure"),
@@ -115,7 +128,6 @@ def update_dashboard(n_clicks, location_text):
     lat, lon, full_address = coords
     local_tz = get_local_timezone(lat, lon)
 
-    # Seasonal Solar Altitude
     seasons = {
         "Spring": datetime(2025, 3, 20, 12),
         "Summer": datetime(2025, 6, 20, 12),
@@ -137,9 +149,9 @@ def update_dashboard(n_clicks, location_text):
         dt_utc = dt_localized.astimezone(pytz.utc)
         altitude = get_altitude(lat, lon, dt_utc)
 
-        day_of_year = dt_local.timetuple().tm_yday
-        sunrise = 8 - 2 * abs((day_of_year - 172) / 172)
-        sunset = 20 + 2 * abs((day_of_year - 172) / 172)
+        sunrise_dt, sunset_dt = find_sunrise_sunset(lat, lon, dt_local.date(), local_tz)
+        sunrise_hour = sunrise_dt.strftime("%H:%M") if sunrise_dt else "N/A"
+        sunset_hour = sunset_dt.strftime("%H:%M") if sunset_dt else "N/A"
 
         seasonal_fig.add_trace(go.Bar(
             x=[name],
@@ -153,18 +165,18 @@ def update_dashboard(n_clicks, location_text):
 
         sunrise_sunset_fig.add_trace(go.Bar(
             x=[name],
-            y=[sunrise],
+            y=[sunrise_dt.hour + sunrise_dt.minute / 60 if sunrise_dt else 0],
             name="Sunrise",
             marker_color="orange",
-            text=f"{sunrise:.2f}h",
+            text=sunrise_hour,
             textposition="outside"
         ))
         sunrise_sunset_fig.add_trace(go.Bar(
             x=[name],
-            y=[sunset],
+            y=[sunset_dt.hour + sunset_dt.minute / 60 if sunset_dt else 0],
             name="Sunset",
             marker_color="blue",
-            text=f"{sunset:.2f}h",
+            text=sunset_hour,
             textposition="outside"
         ))
 
@@ -174,6 +186,7 @@ def update_dashboard(n_clicks, location_text):
         y0=45, y1=45,
         line=dict(color="gray", dash="dash")
     )
+
     seasonal_fig.update_layout(
         title=f"Solar Noon Altitude by Season ({full_address})",
         yaxis_title="Altitude (°)",
@@ -192,6 +205,7 @@ def update_dashboard(n_clicks, location_text):
             )
         ]
     )
+
     sunrise_sunset_fig.update_layout(
         title="Sunrise and Sunset Times by Season",
         yaxis_title="Hour (Local Time)",
