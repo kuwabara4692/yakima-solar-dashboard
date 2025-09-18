@@ -195,4 +195,4 @@ def update_temperature_graph(contents, filename):
     decoded = base64.b64decode(content_string)
     try:
         df_temp = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-        df_temp["Date
+        df_temp["Date"] = pd
