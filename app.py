@@ -1,13 +1,14 @@
-import os
 import dash
 from dash import dcc, html, Input, Output, State
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime, timedelta
 from pysolar.solar import get_altitude, get_azimuth
+from timezonefinder import TimezoneFinder
 import pytz
 import geopy
 from geopy.geocoders import Nominatim
+import os
 
 # Initialize app
 app = dash.Dash(__name__)
@@ -34,7 +35,11 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
     html.Div(id="location-status", style={"color": "#e74c3c", "marginBottom": "10px"}),
 
     dcc.Tabs([
-        dcc.Tab(label="Seasonal Solar Altitude", children=[dcc.Graph(id="seasonal-graph")]),
+        dcc.Tab(label="Seasonal Solar Altitude", children=[
+            dcc.Graph(id="seasonal-graph"),
+            dcc.Graph(id="sunrise-sunset-graph"),
+            html.Div(id="map-preview")
+        ]),
         dcc.Tab(label="Yesterday's Solar Altitude", children=[dcc.Graph(id="yesterday-graph")]),
         dcc.Tab(label="Sun Direction & Location", children=[html.Div(id="sun-info")]),
         dcc.Tab(label="Solar Calendar", children=[
@@ -47,21 +52,28 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
     ])
 ])
 
-# Helper: Geocode city/state
+# Geolocation helpers
 def get_coordinates(location_text):
     geolocator = Nominatim(user_agent="solar-dashboard")
     try:
         location = geolocator.geocode(location_text)
         if location:
-            return location.latitude, location.longitude
+            return location.latitude, location.longitude, location.address
     except:
         return None
     return None
 
-# Callback: Update all graphs and info
+def get_local_timezone(lat, lon):
+    tf = TimezoneFinder()
+    tz_name = tf.timezone_at(lat=lat, lng=lon)
+    return pytz.timezone(tz_name) if tz_name else pytz.utc
+
+# Callback
 @app.callback(
     Output("location-status", "children"),
     Output("seasonal-graph", "figure"),
+    Output("sunrise-sunset-graph", "figure"),
+    Output("map-preview", "children"),
     Output("yesterday-graph", "figure"),
     Output("sun-info", "children"),
     Input("submit-location", "n_clicks"),
@@ -69,14 +81,14 @@ def get_coordinates(location_text):
 )
 def update_dashboard(n_clicks, location_text):
     if not location_text:
-        return "Please enter a city and state.", go.Figure(), go.Figure(), ""
+        return "Please enter a city and state.", go.Figure(), go.Figure(), "", go.Figure(), ""
 
     coords = get_coordinates(location_text)
     if not coords:
-        return f"Could not find location: {location_text}", go.Figure(), go.Figure(), ""
+        return f"Could not find location: {location_text}", go.Figure(), go.Figure(), "", go.Figure(), ""
 
-    lat, lon = coords
-    tz = pytz.utc
+    lat, lon, full_address = coords
+    local_tz = get_local_timezone(lat, lon)
 
     # Seasonal Solar Altitude
     seasons = {
@@ -85,34 +97,99 @@ def update_dashboard(n_clicks, location_text):
         "Fall": datetime(2025, 9, 22, 12),
         "Winter": datetime(2025, 12, 21, 12)
     }
+
     seasonal_fig = go.Figure()
-    for name, dt in seasons.items():
-        dt_utc = tz.localize(dt)
+    sunrise_sunset_fig = go.Figure()
+    season_colors = {
+        "Spring": "#2ecc71",
+        "Summer": "#f1c40f",
+        "Fall": "#e67e22",
+        "Winter": "#3498db"
+    }
+
+    for name, dt_local in seasons.items():
+        dt_localized = local_tz.localize(dt_local)
+        dt_utc = dt_localized.astimezone(pytz.utc)
         altitude = get_altitude(lat, lon, dt_utc)
-        seasonal_fig.add_trace(go.Bar(x=[name], y=[altitude], name=name))
-    seasonal_fig.update_layout(title="Solar Noon Altitude by Season", yaxis_title="Altitude (°)", template="plotly_white")
+
+        # Simulated sunrise/sunset hours
+        day_of_year = dt_local.timetuple().tm_yday
+        sunrise = 8 - 2 * abs((day_of_year - 172) / 172)
+        sunset = 20 + 2 * abs((day_of_year - 172) / 172)
+
+        seasonal_fig.add_trace(go.Bar(
+            x=[name],
+            y=[altitude],
+            name=name,
+            marker_color=season_colors[name],
+            text=f"{altitude:.2f}°",
+            textposition="outside",
+            hovertext=f"{name} Solar Noon<br>{dt_localized.strftime('%Y-%m-%d %I:%M %p %Z')}<br>Altitude: {altitude:.2f}°"
+        ))
+
+        sunrise_sunset_fig.add_trace(go.Bar(
+            x=[name],
+            y=[sunrise],
+            name=f"{name} Sunrise",
+            marker_color="orange",
+            text=f"{sunrise:.2f}h",
+            textposition="outside"
+        ))
+        sunrise_sunset_fig.add_trace(go.Bar(
+            x=[name],
+            y=[sunset],
+            name=f"{name} Sunset",
+            marker_color="blue",
+            text=f"{sunset:.2f}h",
+            textposition="outside"
+        ))
+
+    seasonal_fig.add_shape(
+        type="line",
+        x0=-0.5, x1=3.5,
+        y0=45, y1=45,
+        line=dict(color="gray", dash="dash")
+    )
+    seasonal_fig.update_layout(
+        title=f"Solar Noon Altitude by Season ({full_address})",
+        yaxis_title="Altitude (°)",
+        template="plotly_white",
+        showlegend=False
+    )
+    sunrise_sunset_fig.update_layout(
+        title="Sunrise and Sunset Times by Season",
+        yaxis_title="Hour (UTC)",
+        template="plotly_white"
+    )
+
+    # Map preview
+    map_html = html.Iframe(
+        src=f"https://www.openstreetmap.org/export/embed.html?bbox={lon-0.05}%2C{lat-0.05}%2C{lon+0.05}%2C{lat+0.05}&layer=mapnik&marker={lat}%2C{lon}",
+        style={"width": "100%", "height": "400px", "border": "none"}
+    )
 
     # Yesterday's Solar Altitude
     yesterday = datetime.utcnow().date() - timedelta(days=1)
     times = [datetime.combine(yesterday, datetime.min.time()) + timedelta(minutes=15 * i) for i in range(96)]
-    altitudes = [get_altitude(lat, lon, tz.localize(t)) for t in times]
+    altitudes = [get_altitude(lat, lon, pytz.utc.localize(t)) for t in times]
     yesterday_fig = go.Figure()
     yesterday_fig.add_trace(go.Scatter(x=times, y=altitudes, mode="lines", name="Altitude"))
-    yesterday_fig.update_layout(title=f"Solar Altitude on {yesterday}", xaxis_title="Time (UTC)", yaxis_title="Altitude (°)", template="plotly_white")
+    yesterday_fig.update_layout(title=f"Solar Altitude on {yesterday} ({full_address})", xaxis_title="Time (UTC)", yaxis_title="Altitude (°)", template="plotly_white")
 
     # Sun Info
-    noon = tz.localize(datetime.combine(datetime.utcnow().date(), datetime.min.time()) + timedelta(hours=12))
-    altitude_now = get_altitude(lat, lon, noon)
-    azimuth_now = get_azimuth(lat, lon, noon)
+    noon = local_tz.localize(datetime.combine(datetime.utcnow().date(), datetime.min.time()) + timedelta(hours=12))
+    noon_utc = noon.astimezone(pytz.utc)
+    altitude_now = get_altitude(lat, lon, noon_utc)
+    azimuth_now = get_azimuth(lat, lon, noon_utc)
     sun_info = html.Div([
         html.H4("Sun Direction & Location", style={"color": "#e67e22"}),
-        html.P(f"Location: {location_text}"),
+        html.P(f"Location: {full_address}"),
         html.P(f"Latitude: {lat:.4f}, Longitude: {lon:.4f}"),
         html.P(f"Solar Noon Altitude: {altitude_now:.2f}°"),
         html.P(f"Solar Noon Azimuth: {azimuth_now:.2f}°")
     ])
 
-    return "", seasonal_fig, yesterday_fig, sun_info
+    return "", seasonal_fig, sunrise_sunset_fig, map_html, yesterday_fig, sun_info
 
 # Run app
 if __name__ == "__main__":
