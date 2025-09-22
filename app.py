@@ -102,9 +102,9 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
             html.H3("NASA Solar Observation GIFs", style={"color": "#e67e22", "marginTop": "20px"}),
             html.Div([
                 html.P("SOHO C2 Coronagraph", style={"fontWeight": "bold"}),
-                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_c2small.gif", style={"width": "100%", "maxWidth": "600px"}),
+                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_c2.gif", style={"width": "100%", "maxWidth": "600px"}),
                 html.P("SOHO C3 Coronagraph", style={"fontWeight": "bold", "marginTop": "20px"}),
-                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_c3small.gif", style={"width": "100%", "maxWidth": "600px"}),
+                html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_c3.gif", style={"width": "100%", "maxWidth": "600px"}),
                 html.P("SOHO EIT 284 Å", style={"fontWeight": "bold", "marginTop": "20px"}),
                 html.Img(src="https://soho.nascom.nasa.gov/data/LATEST/current_eit_284small.gif", style={"width": "100%", "maxWidth": "600px"}),
                 html.P([
