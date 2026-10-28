@@ -11,11 +11,13 @@ import os
 app = dash.Dash(__name__)
 app.title = "Solar Dashboard"
 
+current_year = datetime.now().year
+
 solar_events = {
-    "Spring Equinox": "2025-03-20",
-    "Summer Solstice": "2025-06-20",
-    "Fall Equinox": "2025-09-22",
-    "Winter Solstice": "2025-12-21"
+    "Spring Equinox": f"{current_year}-03-20",
+    "Summer Solstice": f"{current_year}-06-20",
+    "Fall Equinox": f"{current_year}-09-22",
+    "Winter Solstice": f"{current_year}-12-21"
 }
 
 # Geolocation helpers
@@ -96,7 +98,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
     ]),
     html.Div([
         html.Label("Enter City and Country:", style={"fontWeight": "bold"}),
-        dcc.Input(id="location-input", type="text", placeholder="e.g. Tokyo, Japan or Nairobi, Kenya", style={"width": "300px"}),
+        dcc.Input(id="location-input", type="text", placeholder="e.g. Raleigh or Tokyo", style={"width": "300px"}),
         html.Button("Submit", id="submit-location", n_clicks=0)
     ], style={"padding": "10px"}),
 
@@ -110,7 +112,7 @@ app.layout = html.Div(style={"backgroundColor": "#fdf6e3", "fontFamily": "Segoe 
         dcc.Tab(label="Yesterday's Solar Altitude", children=[dcc.Graph(id="yesterday-graph")]),
         dcc.Tab(label="Sun Direction & Location", children=[html.Div(id="sun-info")]),
         dcc.Tab(label="Solar Calendar", children=[
-            html.H3("Solstices & Equinoxes in 2025", style={"color": "#e67e22"}),
+            html.H3(f"Solstices & Equinoxes in {datetime.now().year}",style={"color": "#e67e22"}),
             html.Ul(id="calendar-list", style={"listStyleType": "🌞", "paddingLeft": "20px"})
         ]),
         dcc.Tab(label="GIFs", children=[
