@@ -21,33 +21,48 @@ solar_events = {
 # Geolocation helpers
 # TODO: Integrate autocomplete with Google Places or Mapbox
 def get_coordinates(location_text):
-    geolocator = Nominatim(user_agent="solar-dashboard-app")
-    location_text = location_text.strip().title()
+    print("=" * 50)
+    print(f"Searching for: {location_text}")
+
+    geolocator = Nominatim(user_agent="YakimaSolarDashboard/1.0")
 
     try:
-        # Try full input
-        location = geolocator.geocode(location_text, exactly_one=True, timeout=10)
-        if location:
-            print(f"Found location: {location.address}")
-            return location.latitude, location.longitude, location.address
+        location = geolocator.geocode(
+            location_text,
+            exactly_one=True,
+            timeout=10
+        )
 
-        # Fallback: just the city name
+        print(f"Result 1: {location}")
+
+        if location:
+            return (
+                location.latitude,
+                location.longitude,
+                location.address
+            )
+
         city_only = location_text.split(",")[0]
-        location = geolocator.geocode(city_only, exactly_one=True, timeout=10)
-        if location:
-            print(f"Fallback location: {location.address}")
-            return location.latitude, location.longitude, location.address
 
-        # Fallback: guess country
-        location = geolocator.geocode(f"{city_only}, United States", exactly_one=True, timeout=10)
+        location = geolocator.geocode(
+            city_only,
+            exactly_one=True,
+            timeout=10
+        )
+
+        print(f"Result 2: {location}")
+
         if location:
-            print(f"Guessed country fallback: {location.address}")
-            return location.latitude, location.longitude, location.address
+            return (
+                location.latitude,
+                location.longitude,
+                location.address
+            )
 
     except Exception as e:
-        print(f"Geocoding error: {e}")
-        return None
+        print(f"GEOCODING ERROR: {e}")
 
+    print("NO LOCATION FOUND")
     return None
 
 
