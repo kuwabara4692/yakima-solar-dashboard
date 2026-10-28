@@ -285,7 +285,6 @@ def update_dashboard(n_clicks, location_text):
     # Solar Calendar with time of day
     calendar_items = []
     
-    current_year = datetime.now().year
     solar_events = get_solar_events(current_year)
     
     for label, utc_dt in solar_events:
