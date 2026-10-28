@@ -7,35 +7,18 @@ from timezonefinder import TimezoneFinder
 import pytz
 from geopy.geocoders import Nominatim
 import os
-from skyfield.api import load
-from skyfield import almanac
 
 app = dash.Dash(__name__)
 app.title = "Solar Dashboard"
-ts = load.timescale()
-eph = load('de421.bsp')
 
-def get_solar_events(year):
-    t0 = ts.utc(year, 1, 1)
-    t1 = ts.utc(year + 1, 1, 1)
+current_year = datetime.now().year
 
-    times, events = almanac.find_discrete(
-        t0,
-        t1,
-        almanac.seasons(eph)
-    )
-
-    names = {
-        0: "Spring Equinox",
-        1: "Summer Solstice",
-        2: "Fall Equinox",
-        3: "Winter Solstice"
-    }
-
-    return [
-        (names[event], time.utc_datetime())
-        for time, event in zip(times, events)
-    ]
+solar_events = {
+    "Spring Equinox": f"{current_year}-03-20",
+    "Summer Solstice": f"{current_year}-06-20",
+    "Fall Equinox": f"{current_year}-09-22",
+    "Winter Solstice": f"{current_year}-12-21"
+}
 
 # Geolocation helpers
 # TODO: Integrate autocomplete with Google Places or Mapbox
@@ -170,15 +153,12 @@ def update_dashboard(n_clicks, location_text):
     lat, lon, full_address = coords
     local_tz = get_local_timezone(lat, lon)
 
-    current_year = datetime.now().year
-    
     seasons = {
-        "Spring": datetime(current_year, 3, 20, 12),
-        "Summer": datetime(current_year, 6, 20, 12),
-        "Fall": datetime(current_year, 9, 22, 12),
-        "Winter": datetime(current_year, 12, 21, 12)
+        "Spring": datetime(2025, 3, 20, 12),
+        "Summer": datetime(2025, 6, 20, 12),
+        "Fall": datetime(2025, 9, 22, 12),
+        "Winter": datetime(2025, 12, 21, 12)
     }
-
 
     seasonal_fig = go.Figure()
     sunrise_sunset_fig = go.Figure()
@@ -284,27 +264,11 @@ def update_dashboard(n_clicks, location_text):
 
     # Solar Calendar with time of day
     calendar_items = []
-    
-    solar_events = get_solar_events(current_year)
-    
-    for label, utc_dt in solar_events:
-        local_dt = utc_dt.replace(
-            tzinfo=pytz.utc
-        ).astimezone(local_tz)
-    
-        formatted = local_dt.strftime(
-            "%B %d, %Y at %I:%M %p %Z"
-        )
-    
-        calendar_items.append(
-            html.Li(
-                f"{label}: {formatted}",
-                style={
-                    "marginBottom": "10px",
-                    "fontSize": "18px"
-                }
-            )
-        )
+    for label, date_str in solar_events.items():
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        dt_local = local_tz.localize(datetime.combine(dt.date(), datetime.min.time()) + timedelta(hours=12))
+        formatted = dt_local.strftime("%B %d, %Y at %I:%M %p %Z")
+        calendar_items.append(html.Li(f"{label}: {formatted}", style={"marginBottom": "10px", "fontSize": "18px"}))
 
     return "", seasonal_fig, sunrise_sunset_fig, yesterday_fig, sun_info, calendar_items
 
